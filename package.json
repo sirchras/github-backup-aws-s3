@@ -4,13 +4,18 @@
   "description": "simple tool to backup github user repos to and aws s3 bucket",
   "main": "index.js",
   "dependencies": {
+    "@octokit/rest": "^18.10.0",
     "aws-sdk": "^2.82.0",
-    "bluebird": "^3.5.0",
     "dotenv": "^4.0.0",
-    "github": "^9.2.0",
-    "request": "^2.81.0"
+    "superagent": "^6.1.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "eslint": "^7.32.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0"
+  },
   "keywords": [
     "serverless",
     "lambda",
