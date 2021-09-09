@@ -1,6 +1,6 @@
-const backup = require("./backup")
+const backup = require('./backup')
 
-require("dotenv").config()
+require('dotenv').config()
 
 const options = {
   githubAccessToken: process.env.GITHUB_ACCESS_TOKEN,
@@ -14,11 +14,11 @@ const options = {
 
 backup(options).then(
   () => {
-    console.log("")
-    console.log("all repos was succesfully backed up")
+    console.log('')
+    console.log('all repos was succesfully backed up')
   },
   error => {
-    console.log("")
+    console.log('')
     console.error(error)
   }
 )

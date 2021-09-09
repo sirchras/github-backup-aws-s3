@@ -1,6 +1,6 @@
-const backup = require("./backup")
+const backup = require('./backup')
 
-require("dotenv").config()
+require('dotenv').config()
 
 module.exports.runBackup = (event, context, callback) => {
   const options = {
@@ -15,7 +15,7 @@ module.exports.runBackup = (event, context, callback) => {
 
   backup(options).then(() => {
     callback(null, {
-      response: "all repos was succesfully backed up"
+      response: 'all repos was succesfully backed up'
     })
   }, callback)
 }
