@@ -1,10 +1,9 @@
-const GitHubApi = require('github')
+const { Octokit } = require('@octokit/rest')
 const stream = require('stream')
-const request = require('request')
+const request = require('superagent')
 const aws = require('aws-sdk')
 const Promise = require('bluebird')
 
-const github = new GitHubApi()
 const requiredOptions = [
   'githubAccessToken',
   's3BucketName',
@@ -20,41 +19,24 @@ module.exports = function (options) {
     }
   })
 
+  const octokit = new Octokit({
+    auth: options.githubAccessToken,
+    userAgent: 'github-backup-aws-s3 v1.2.0'
+  })
+
   function getAllRepos () {
-    return new Promise((resolve, reject) => {
-      github.authenticate({
-        type: 'token',
-        token: options.githubAccessToken
+    if (options.mode === 'organisation') {
+      console.log('Running in Organisation mode')
+      return octokit.paginate(octokit.rest.repos.listForOrg, {
+        org: options.organisation,
+        type: 'all'
       })
-
-      let repos = []
-
-      if (options.mode === 'organisation') {
-        console.log('Running in Organisation mode')
-        github.repos.getForOrg(
-          { org: options.organisation, per_page: 100 },
-          handleReposResponse
-        )
-      } else {
-        // Assume get all repos current user has access to
-        console.log('Running in User mode')
-        github.repos.getAll({ per_page: 100 }, handleReposResponse)
-      }
-
-      function handleReposResponse (err, res) {
-        if (err) {
-          reject(err)
-          return
-        }
-
-        repos = repos.concat(res.data)
-        if (github.hasNextPage(res)) {
-          github.getNextPage(res, handleReposResponse)
-        } else {
-          resolve(repos)
-        }
-      }
-    })
+    } else {
+      console.log('Running in User mode')
+      return octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
+        affiliation: 'owner'
+      })
+    }
   }
 
   function copyReposToS3 (repos) {
@@ -70,19 +52,29 @@ module.exports = function (options) {
     const uploader = Promise.promisify(s3.upload.bind(s3))
     const tasks = repos.map(repo => {
       const passThroughStream = new stream.PassThrough()
-      const arhiveURL =
-        'https://api.github.com/repos/' +
-        repo.full_name +
-        '/tarball/master?access_token=' +
-        options.githubAccessToken
-      const requestOptions = {
-        url: arhiveURL,
-        headers: {
-          'User-Agent': 'nodejs'
-        }
-      }
+      // const archiveURL =
+      //   'https://api.github.com/repos/' +
+      //   repo.full_name +
+      //   '/tarball/master?access_token=' +
+      //   options.githubAccessToken
 
-      request(requestOptions).pipe(passThroughStream)
+      const archiveURL = octokit.rest.repos.downloadTarballArchive({
+        owner: repo.owner.login,
+        repo: repo.name
+      })
+
+      // const requestOptions = {
+      //   url: archiveURL,
+      //   headers: {
+      //     'User-Agent': 'nodejs'
+      //   }
+      // }
+
+      const req = request.get(archiveURL)
+        .set('User-Agent', 'nodejs')
+
+      // request(requestOptions).pipe(passThroughStream)
+      req.pipe(passThroughStream)
 
       const bucketName = options.s3BucketName
       const objectName = date + '/' + repo.full_name + '.tar.gz'
@@ -94,7 +86,7 @@ module.exports = function (options) {
         ServerSideEncryption: 'AES256'
       }
 
-      return uploader(params).then(result => {
+      return uploader(params).then(() => {
         console.log('[✓] ' + repo.full_name + '.git - backed up')
       })
     })
