@@ -3,9 +3,13 @@
   "version": "1.1.0",
   "description": "simple tool to backup github user repos to and aws s3 bucket",
   "main": "index.js",
+  "scripts": {
+    "start": "node ."
+  },
   "dependencies": {
     "@octokit/rest": "^18.10.0",
     "aws-sdk": "^2.82.0",
+    "bluebird": "^3.7.2",
     "dotenv": "^4.0.0",
     "superagent": "^6.1.0"
   },
