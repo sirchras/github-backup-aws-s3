@@ -1,8 +1,6 @@
+const { Readable } = require('stream')
 const { Octokit } = require('@octokit/rest')
-const stream = require('stream')
-const request = require('superagent')
 const aws = require('aws-sdk')
-const Promise = require('bluebird')
 
 const requiredOptions = [
   'githubAccessToken',
@@ -49,45 +47,25 @@ module.exports = function (options) {
       secretAccessKey: options.s3AccessSecretKey
     })
 
-    const uploader = Promise.promisify(s3.upload.bind(s3))
-    const tasks = repos.map(repo => {
-      const passThroughStream = new stream.PassThrough()
-      // const archiveURL =
-      //   'https://api.github.com/repos/' +
-      //   repo.full_name +
-      //   '/tarball/master?access_token=' +
-      //   options.githubAccessToken
-
-      const archiveURL = octokit.rest.repos.downloadTarballArchive({
-        owner: repo.owner.login,
-        repo: repo.name
+    const tasks = repos.map(async ({ name: repo, owner: { login: owner } }) => {
+      // download archive
+      const archive = await octokit.rest.repos.downloadTarballArchive({
+        owner,
+        repo
       })
 
-      // const requestOptions = {
-      //   url: archiveURL,
-      //   headers: {
-      //     'User-Agent': 'nodejs'
-      //   }
-      // }
+      const stream = Readable.from(Buffer.from(archive.data))
 
-      const req = request.get(archiveURL)
-        .set('User-Agent', 'nodejs')
-
-      // request(requestOptions).pipe(passThroughStream)
-      req.pipe(passThroughStream)
-
-      const bucketName = options.s3BucketName
-      const objectName = date + '/' + repo.full_name + '.tar.gz'
-      const params = {
-        Bucket: bucketName,
-        Key: objectName,
-        Body: passThroughStream,
+      // upload archive to s3
+      const bucketParams = {
+        Bucket: options.s3BucketName,
+        Key: `${date}/${owner}/${repo}.tar.gz`,
+        Body: stream,
         StorageClass: options.s3StorageClass || 'STANDARD',
         ServerSideEncryption: 'AES256'
       }
-
-      return uploader(params).then(() => {
-        console.log('[✓] ' + repo.full_name + '.git - backed up')
+      return s3.upload(bucketParams).promise().then(() => {
+        console.log(`[✓] ${owner}/${repo}.git - backed up`)
       })
     })
 
