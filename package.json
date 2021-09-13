@@ -9,9 +9,7 @@
   "dependencies": {
     "@octokit/rest": "^18.10.0",
     "aws-sdk": "^2.82.0",
-    "bluebird": "^3.7.2",
-    "dotenv": "^4.0.0",
-    "superagent": "^6.1.0"
+    "dotenv": "^4.0.0"
   },
   "devDependencies": {
     "eslint": "^7.32.0",
