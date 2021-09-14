@@ -10,6 +10,7 @@ module.exports.runBackup = (event, context, callback) => {
     WithDecryption: true
   }
 
+  // maybe the ssm call could be moved?
   ssm.getParameter(param).promise()
     .then(res => {
       const { Parameter: { Value: githubAccessToken } } = res
@@ -25,9 +26,16 @@ module.exports.runBackup = (event, context, callback) => {
       }
     })
     .then(options => backup(options))
-    .then(() => {
-      callback(null, {
-        response: 'all repos were successfully backed up'
-      })
+    .then(res => {
+      const reducer = (prev, curr) => (curr instanceof Error) ? prev + 1 : prev
+      const errors = res.reduce(reducer, 0)
+
+      if (errors === 0) {
+        callback(null, {
+          response: `all (${res.length}) repos were successfully backed up`
+        })
+      } else {
+        callback(new Error(`not all (${res.length}) repos backed up: ${errors} repos were not backed up`))
+      }
     })
 }
