@@ -31,6 +31,7 @@ module.exports = function (options) {
       })
     } else {
       console.log('Running in User mode')
+      // limiting to only user owned repos
       return octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
         affiliation: 'owner'
       })
@@ -42,17 +43,36 @@ module.exports = function (options) {
     console.log('-------------------------------------------------')
 
     const date = new Date().toISOString()
+    // this config may not be necessary
+    aws.config.update({ region: 'ap-southeast-2' }) // could include as an env var
     const s3 = new aws.S3({
       accessKeyId: options.s3AccessKeyId,
       secretAccessKey: options.s3AccessSecretKey
     })
 
     const tasks = repos.map(async ({ name: repo, owner: { login: owner } }) => {
-      // download archive
-      const archive = await octokit.rest.repos.downloadTarballArchive({
+      // check if repo not empty
+      const branches = await octokit.paginate(octokit.rest.repos.listBranches, {
         owner,
         repo
       })
+      if (branches.length === 0) {
+        console.warn(`${owner}/${repo}.git is empty - skipping`)
+        // not necessarily an error
+        return new Error('NOT BACKED UP')
+      }
+
+      // download archive
+      let archive
+      try {
+        archive = await octokit.rest.repos.downloadTarballArchive({
+          owner,
+          repo
+        })
+      } catch (err) {
+        console.error(`couldn't retrieve ${owner}/${repo}.git\n`, err.message)
+        return new Error('NOT BACKED UP')
+      }
 
       const stream = Readable.from(Buffer.from(archive.data))
 
@@ -64,13 +84,24 @@ module.exports = function (options) {
         StorageClass: options.s3StorageClass || 'STANDARD',
         ServerSideEncryption: 'AES256'
       }
-      return s3.upload(bucketParams).promise().then(() => {
-        console.log(`[✓] ${owner}/${repo}.git - backed up`)
-      })
+      // for large archives, sdk may require a manual fix, see:
+      // https://github.com/aws/aws-sdk-js/issues/3163
+      return s3.upload(bucketParams).promise()
+        .then(
+          // upload successful
+          () => console.log(`[✓] ${owner}/${repo}.git - backed up`),
+          // upload failed
+          err => {
+            console.error(`[✕] ${owner}/${repo}.git - not backed up\n`, err)
+            return new Error('NOT BACKED UP')
+          }
+        )
     })
 
     return Promise.all(tasks)
   }
 
-  return getAllRepos().then(copyReposToS3)
+  return getAllRepos()
+    .then(copyReposToS3)
+    .catch(console.error)
 }
