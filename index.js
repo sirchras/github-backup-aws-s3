@@ -14,11 +14,9 @@ const options = {
 
 backup(options).then(
   () => {
-    console.log('')
-    console.log('all repos was succesfully backed up')
+    console.log('\nall repos was succesfully backed up')
   },
   error => {
-    console.log('')
     console.error(error)
   }
 )
